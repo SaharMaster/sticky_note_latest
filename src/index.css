@@ -1,5 +1,35 @@
 @import 'tailwindcss';
 
+.scrollbar-yellow {
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: #ffffff #fde047; /* thumb, track */
+    scrollbar-gutter: stable;
+  }
+
+  /* Chromium/WebKit */
+  .scrollbar-yellow::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  .scrollbar-yellow::-webkit-scrollbar-track {
+    background: #fde047;        /* yellow */
+    border-radius: 9999px;
+    margin: 6px;                /* rounded top/bottom ends */
+  }
+  .scrollbar-yellow::-webkit-scrollbar-thumb {
+    background: #ffffff;        /* white thumb */
+    border-radius: 9999px;
+    border: 2px solid #facc15;  /* subtle yellow outline */
+  }
+  .scrollbar-yellow::-webkit-scrollbar-thumb:hover {
+    background: #f8fafc;
+  }
+
+  .scrollbar-yellow::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
 /* Hide native scrollbars for the board area */
 .scroll-hide::-webkit-scrollbar { display: none; }
 .scroll-hide { -ms-overflow-style: none; scrollbar-width: none; }
