@@ -2,7 +2,7 @@ import React from "react";
 
 /**
  * StickyNote
- * - Visual-only note; no dates/months (to be implemented later)
+ * - Visual-only note; now fills its grid cell (keeps square ratio).
  */
 
 export default function StickyNote({ tone = "yellow" }) {
@@ -17,7 +17,7 @@ export default function StickyNote({ tone = "yellow" }) {
   };
   return (
     <div
-      className={`w-[180px] rounded-md p-3 shadow-sm ring-1 ${tones[tone] ?? tones.yellow}`}
+      className={`w-full rounded-md p-3 shadow-sm ring-1 ${tones[tone] ?? tones.yellow}`}
       style={{ aspectRatio: "1 / 1" }}
     />
   );

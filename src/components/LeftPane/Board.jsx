@@ -1,29 +1,40 @@
 import React from "react";
 
 /**
- * Board (a single board row inside BoardsStorage)
- * - Active state highlight
- * - Inline name input only when the board is first created (isNew)
+ * Board row
+ * - Active highlight
+ * - Inline name input when creating or editing
+ * - Right-click propagates to open context menu
  */
 
-export default function Board({ active, isNew, defaultName, onActivate, onFinish }) {
+export default function Board({
+  active,
+  isNew,
+  isEditing,
+  defaultName,
+  onActivate,
+  onFinish,
+  onContextMenu,
+}) {
   const inputRef = React.useRef(null);
+  const showInput = isNew || isEditing;
 
   React.useEffect(() => {
-    if (isNew && inputRef.current) {
+    if (showInput && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.setSelectionRange(0, inputRef.current.value.length);
     }
-  }, [isNew]);
+  }, [showInput]);
 
   return (
     <div
+      onContextMenu={onContextMenu}
       className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition ${
         active ? "bg-neutral-100 ring-1 ring-neutral-300" : "border border-neutral-200 hover:bg-neutral-50"
       }`}
     >
       <span className="inline-block size-3 rounded-full bg-white ring-1 ring-neutral-300" />
-      {isNew ? (
+      {showInput ? (
         <input
           ref={inputRef}
           defaultValue={defaultName}

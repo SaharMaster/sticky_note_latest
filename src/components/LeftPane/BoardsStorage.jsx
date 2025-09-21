@@ -15,6 +15,7 @@ export default function BoardsStorage({
   onCreateBoard,
   onCommitCreateName,
   onOpenBoard,
+  onBoardContextMenu, // NEW
 }) {
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md bg-white shadow-sm ring-1 ring-black/5">
@@ -33,9 +34,11 @@ export default function BoardsStorage({
               key={b.id}
               active={b.id === selectedId}
               isNew={b.id === editingId}
+              isEditing={b.id === editingId}
               defaultName={b.name}
               onActivate={() => onOpenBoard(b.id)}
               onFinish={(name) => onCommitCreateName(b.id, name)}
+              onContextMenu={(e) => onBoardContextMenu?.(e, b.id)}
             />
           ))}
         </div>
