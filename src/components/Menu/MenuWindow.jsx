@@ -1,10 +1,10 @@
 import React from "react";
 
 /**
- * Generic MenuWindow shell
+ * MenuWindow
  * - Draggable, closable, lockable
+ * - Theming knobs: tone (ring), size (min width), density (header paddings)
  * - Children render inside a relative container so submenus can anchor
- * - Corners are less rounded (rounded-sm)
  */
 export default function MenuWindow({
   id,
@@ -17,9 +17,33 @@ export default function MenuWindow({
   onDragTo,
   onFocus,
   children,
+  // theming
+  tone = "yellow", // 'yellow' | 'neutral' | 'emerald' | 'rose' | 'violet' | 'sky' | 'lime'
+  size = "md",     // 'sm' | 'md' | 'lg'
+  density = "regular", // 'regular' | 'compact'
 }) {
   const containerRef = React.useRef(null);
   const anchorRef = React.useRef({ offsetX: 0, offsetY: 0 });
+
+  const ringByTone = {
+    yellow: "ring-yellow-300",
+    neutral: "ring-neutral-200",
+    emerald: "ring-emerald-300",
+    rose: "ring-rose-300",
+    violet: "ring-violet-300",
+    sky: "ring-sky-300",
+    lime: "ring-lime-300",
+  };
+  const ringClass = ringByTone[tone] ?? ringByTone.yellow;
+
+  const minWBySize = {
+    sm: "min-w-[200px]",
+    md: "min-w-[240px]",
+    lg: "min-w-[300px]",
+  };
+  const minWClass = minWBySize[size] ?? minWBySize.md;
+
+  const headerPad = density === "compact" ? "px-2 py-1" : "px-2 py-1.5";
 
   const onHandlePointerDown = (e) => {
     e.preventDefault();
@@ -55,17 +79,37 @@ export default function MenuWindow({
       ref={containerRef}
       className="pointer-events-auto absolute select-none"
       style={{ left: x, top: y, zIndex: z }}
-      onMouseDown={onFocus}
-      onContextMenu={(e) => e.stopPropagation()}
+      data-menu-window="true"
+      onMouseDown={(e) => {
+        // Don't close via document-level closer when clicking inside
+        e.stopPropagation();
+        onFocus?.();
+      }}
+      onContextMenu={(e) => {
+        // Prevent browser menu and prevent outside-closer from seeing this
+        e.preventDefault();
+        e.stopPropagation();
+      }}
     >
-      <div className="min-w-[240px] rounded-sm bg-white shadow-sm ring-1 ring-yellow-300">
+      <div className={`${minWClass} rounded-sm bg-white shadow-sm ring-1 ${ringClass}`}>
         {/* Title bar */}
-        <div className="flex items-center justify-between rounded-t-sm border-b border-neutral-200 bg-neutral-50 px-2 py-1.5">
+        <div
+          className={`flex items-center justify-between rounded-t-sm border-b border-neutral-200 bg-neutral-50 ${headerPad}`}
+          onContextMenu={(e) => {
+            // Also suppress native menu specifically over header/controls
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
           <div className="flex items-center gap-1">
             <button
               aria-label="Move"
               title="Move"
               onPointerDown={onHandlePointerDown}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
               className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-neutral-500 hover:text-neutral-700 active:cursor-grabbing cursor-grab"
             >
               <BarsIcon />
@@ -74,6 +118,10 @@ export default function MenuWindow({
               aria-label={locked ? "Unlock" : "Lock"}
               title={locked ? "Unlock" : "Lock"}
               onClick={onToggleLock}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
               className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 ${
                 locked
                   ? "bg-red-500 text-white hover:bg-red-600"
@@ -88,6 +136,10 @@ export default function MenuWindow({
             aria-label="Close"
             title="Close"
             onClick={onClose}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
             className="inline-flex size-5 items-center justify-center rounded text-red-500 hover:bg-red-50 hover:text-red-600"
           >
             <CloseIcon />
@@ -95,7 +147,17 @@ export default function MenuWindow({
         </div>
 
         {/* Content area (relative for submenus) */}
-        <div className="relative">{children}</div>
+        <div
+          className="relative"
+          data-menu-window="true"
+          onContextMenu={(e) => {
+            // Suppress native context menu inside content region too
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

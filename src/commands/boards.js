@@ -1,0 +1,25 @@
+/**
+ * Boards commands
+ * - Requires boardsDomain and confirm from deps
+ */
+export function createBoardsCommands({ boardsDomain, confirm }) {
+    return {
+      // Supports "boards.rename.start"
+      rename: {
+        start: async ({ id }) => {
+          boardsDomain.startRenameBoard(id);
+        },
+      },
+  
+      // "boards.delete"
+      delete: async ({ id }) => {
+        const ok = await confirm("Are you sure?");
+        if (ok) boardsDomain.deleteBoard(id);
+      },
+  
+      // "boards.create"
+      create: async () => {
+        boardsDomain.createBoard();
+      },
+    };
+  }

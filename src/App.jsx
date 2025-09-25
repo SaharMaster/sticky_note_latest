@@ -11,149 +11,212 @@ import BoardView from "./components/RightPane/BoardView";
 /* Menu system */
 import MenuWindow from "./components/Menu/MenuWindow";
 import MenuContent from "./components/Menu/MenuContent";
-import ConfirmBox from "./components/Menu/ConfirmBox";
+
+/* Services */
+import { ConfirmProvider, useConfirm } from "./services/confirmService";
+import { useBoardsDomain } from "./domain/boards";
+import { createCommandExecutor } from "./services/commandExecutor";
+import { buildMenu, prefetchMenu } from "./services/menuRegistry";
 
 export default function App() {
-  const [boards, setBoards] = React.useState([]);
-  const [selectedId, setSelectedId] = React.useState(null);
-  const [editingId, setEditingId] = React.useState(null);
+  return (
+    <ConfirmProvider>
+      <AppInner />
+    </ConfirmProvider>
+  );
+}
 
-  // Global menu layer
+function AppInner() {
+  // Boards domain (state + pure actions)
+  const boards = useBoardsDomain();
+  const confirm = useConfirm();
+
+  // Menu overlay state
   const [menus, setMenus] = React.useState([]);
   const zRef = React.useRef(50);
-  const [confirmDeleteId, setConfirmDeleteId] = React.useState(null);
 
-  const createNote = () => {
-    const tones = ["yellow", "sky", "emerald", "amber", "rose", "violet", "lime"];
-    const tone = tones[Math.floor(Math.random() * tones.length)];
-    return { id: uid(), tone };
+  const executor = React.useMemo(
+    () => createCommandExecutor({ boardsDomain: boards, confirm }),
+    [boards, confirm]
+  );
+
+  // Unique key per menu "component" to prevent duplicates
+  const getMenuKey = (kind, extra = {}) => {
+    switch (kind) {
+      case "board":
+        return `board:${extra.boardId ?? "none"}`; // one per board
+      case "hello":
+        return "hello"; // singleton
+      default:
+        return String(kind);
+    }
   };
 
-  const createBoard = () => {
-    const b = { id: uid(), name: "New board", rows: [[createNote()]] };
-    setBoards((prev) => [...prev, b]);
-    setSelectedId(b.id);
-    setEditingId(b.id);
+  // Keep menus within viewport and slightly away from edges
+  const clampPosition = (clientX, clientY) => {
+    const margin = 8;
+    const estW = 260; // conservative default min width
+    const estH = 220; // conservative default height
+    const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+
+    let x = clientX;
+    let y = clientY;
+
+    if (x > vw - estW - margin) x = Math.max(margin, vw - estW - margin);
+    if (y > vh - estH - margin) y = Math.max(margin, vh - estH - margin);
+    if (x < margin) x = margin;
+    if (y < margin) y = margin;
+
+    return { x, y };
   };
 
-  const commitCreateName = (id, name) => {
-    const finalName = (name || "").trim() || "Untitled";
-    setBoards((prev) => prev.map((b) => (b.id === id ? { ...b, name: finalName } : b)));
-    setEditingId(null);
-  };
-
-  const startRenameBoard = (id) => setEditingId(id);
-  const deleteBoard = (id) => {
-    setBoards((prev) => prev.filter((b) => b.id !== id));
-    if (selectedId === id) setSelectedId(null);
-  };
-  const openBoard = (id) => setSelectedId(id);
-
-  const addNoteToRow = (boardId, rowIdx) => {
-    setBoards((prev) =>
-      prev.map((b) =>
-        b.id !== boardId
-          ? b
-          : { ...b, rows: b.rows.map((r, i) => (i === rowIdx ? [...r, createNote()] : r)) }
-      )
-    );
-  };
-  const addNewRow = (boardId) => {
-    setBoards((prev) =>
-      prev.map((b) => (b.id !== boardId ? b : { ...b, rows: [...b.rows, [createNote()]] }))
-    );
-  };
-
-  const selectedBoard = boards.find((b) => b.id === selectedId) || null;
-
-  /* -------- Global Menu actions -------- */
-
+  // Open menu with de-dup (bring to front and move if already open)
   const openMenu = (kind, clientX, clientY, extra = {}) => {
     const id = uid();
     const z = ++zRef.current;
-    // Keep only locked menus; replace the rest
+    const { x, y } = clampPosition(clientX, clientY);
+    const key = getMenuKey(kind, extra);
+
     setMenus((prev) => {
+      // Keep only locked menus from previous batch
       const locked = prev.filter((m) => m.locked);
-      return [...locked, { id, x: clientX, y: clientY, z, locked: false, kind, extra }];
+
+      // Try to find existing menu with the same key (locked or unlocked)
+      const all = prev;
+      const existing = all.find((m) => m.key === key);
+      if (existing) {
+        // Update position and z of existing; keep lock state as-is
+        return all.map((m) =>
+          m.key === key ? { ...m, x, y, z: ++zRef.current } : m
+        );
+      }
+
+      // Otherwise, create a new one
+      return [
+        ...locked,
+        { id, key, x, y, z, locked: false, kind, extra },
+      ];
     });
   };
 
   const closeMenu = (id) => setMenus((prev) => prev.filter((m) => m.id !== id));
+  const closeUnlockedMenus = () => setMenus((prev) => prev.filter((m) => m.locked));
+
   const toggleLock = (id) =>
     setMenus((prev) => prev.map((m) => (m.id === id ? { ...m, locked: !m.locked } : m)));
+
   const onDragTo = (id, { clientX, clientY, offsetX, offsetY }) => {
     setMenus((prev) =>
       prev.map((m) => (m.id === id ? { ...m, x: clientX - offsetX, y: clientY - offsetY } : m))
     );
   };
+
   const bringToFront = (id) => {
     const z = ++zRef.current;
     setMenus((prev) => prev.map((m) => (m.id === id ? { ...m, z } : m)));
   };
 
-  // Context menu triggers
-  const handleRightPaneContext = (e) => {
+  // Theme per menu kind
+  const getMenuTheme = (kind) => {
+    switch (kind) {
+      case "hello":
+        return { tone: "neutral", size: "md", density: "regular" };
+      case "board":
+      default:
+        return { tone: "yellow", size: "md", density: "regular" };
+    }
+  };
+
+  // Prefetch menus and commands before opening
+  const prefetchForKind = async (kind) => {
+    switch (kind) {
+      case "board":
+        await Promise.all([prefetchMenu("board"), executor.prefetch(["boards"])]);
+        break;
+      case "hello":
+        await Promise.all([prefetchMenu("hello"), executor.prefetch(["demo"])]);
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Context menu triggers (hello menu only from canvas area, not Nav)
+  const handleCanvasContext = async (e) => {
     e.preventDefault();
+    await prefetchForKind("hello");
     openMenu("hello", e.clientX, e.clientY);
   };
-  const handleBoardContext = (e, boardId) => {
+
+  // Board row context menu
+  const handleBoardContext = async (e, boardId) => {
     e.preventDefault();
+    await prefetchForKind("board");
     openMenu("board", e.clientX, e.clientY, { boardId });
   };
 
-  // Delete confirmation
-  const askDeleteBoard = (boardId) => setConfirmDeleteId(boardId);
-  const confirmYes = () => {
-    if (confirmDeleteId) deleteBoard(confirmDeleteId);
-    setConfirmDeleteId(null);
-    setMenus((prev) => prev.filter((m) => m.locked));
-  };
-  const confirmNo = () => setConfirmDeleteId(null);
-
-  // Menu schemas
-  const helloItems = [
-    { type: "action", label: "Regular parameter", onClick: () => {} },
-    { type: "toggle", label: "Enabled/disabled parameter" },
-    {
-      type: "submenu",
-      label: "Submenu parameter",
-      items: [
-        { type: "action", label: "Parameter", onClick: () => {} },
-        { type: "action", label: "Parameter", onClick: () => {} },
-        { type: "action", label: "Parameter", onClick: () => {} },
-      ],
-    },
-    { type: "separator" },
-  ];
-
+  // Command-driven content
   const renderMenuContent = (m) => {
-    if (m.kind === "hello") return <MenuContent items={helloItems} />;
+    const items = buildMenu(m.kind, { extra: m.extra });
+    const theme = getMenuTheme(m.kind);
 
-    if (m.kind === "board") {
-      const id = m.extra.boardId;
-      const items = [
-        {
-          type: "action",
-          label: "Rename board",
-          onClick: () => {
-            startRenameBoard(id);
-            closeMenu(m.id);
-          },
-        },
-        {
-          type: "action",
-          label: "Delete board",
-          danger: true,
-          onClick: () => {
-            askDeleteBoard(id);
-            closeMenu(m.id);
-          },
-        },
-      ];
-      return <MenuContent items={items} />;
-    }
-    return null;
+    const handleAction = async (item) => {
+      if (item?.type !== "action" || !item.command) return;
+      await executor.run(item.command, item.args || {});
+      if (item.closeOnRun !== false) closeMenu(m.id);
+    };
+
+    return (
+      <MenuContent
+        items={items}
+        onAction={handleAction}
+        density={theme.density}
+        tone={theme.tone}
+      />
+    );
   };
+
+  // Close unlocked menus on any outside left/right click via capture listeners
+  React.useEffect(() => {
+    const isInsideMenuEvent = (e) => {
+      // Prefer composedPath for robust hit-testing (SVG, nested elements)
+      if (typeof e.composedPath === "function") {
+        const path = e.composedPath();
+        for (const el of path) {
+          if (
+            el &&
+            el.getAttribute &&
+            el.getAttribute("data-menu-window") === "true"
+          ) {
+            return true;
+          }
+        }
+      }
+      const t = e.target;
+      return !!(t && typeof t.closest === "function" && t.closest('[data-menu-window="true"]'));
+    };
+
+    const onPointerDownCapture = (e) => {
+      if (menus.length === 0) return;
+      if (isInsideMenuEvent(e)) return; // ignore clicks inside any menu
+      // Close only unlocked, allow the event to continue (so a new menu can open)
+      setMenus((prev) => prev.filter((m) => m.locked));
+    };
+
+    const onContextMenuCapture = (e) => {
+      if (menus.length === 0) return;
+      if (isInsideMenuEvent(e)) return; // ignore right-clicks inside menu
+      setMenus((prev) => prev.filter((m) => m.locked));
+    };
+
+    document.addEventListener("pointerdown", onPointerDownCapture, true);
+    document.addEventListener("contextmenu", onContextMenuCapture, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDownCapture, true);
+      document.removeEventListener("contextmenu", onContextMenuCapture, true);
+    };
+  }, [menus.length]);
 
   return (
     <div className="h-screen w-screen bg-white text-neutral-800">
@@ -162,50 +225,55 @@ export default function App() {
         <LeftPane>
           <ShortcutIsland />
           <BoardsStorage
-            boards={boards}
-            selectedId={selectedId}
-            editingId={editingId}
-            onCreateBoard={createBoard}
-            onCommitCreateName={commitCreateName}
-            onOpenBoard={openBoard}
+            boards={boards.boards}
+            selectedId={boards.selectedId}
+            editingId={boards.editingId}
+            onCreateBoard={boards.createBoard}
+            onCommitCreateName={boards.commitCreateName}
+            onOpenBoard={boards.openBoard}
             onBoardContextMenu={handleBoardContext}
           />
         </LeftPane>
 
         {/* RIGHT PANE */}
-        <RightPane onContextMenu={handleRightPaneContext}>
-          <Nav title={selectedBoard ? selectedBoard.name : ""} />
+        <RightPane>
+          <Nav title={boards.selectedBoard ? boards.selectedBoard.name : ""} />
           <BoardView
-            board={selectedBoard}
-            onAddNoteToRow={(i) => selectedBoard && addNoteToRow(selectedBoard.id, i)}
-            onAddRow={() => selectedBoard && addNewRow(selectedBoard.id)}
+            board={boards.selectedBoard}
+            onAddNoteToRow={(i) =>
+              boards.selectedBoard && boards.addNoteToRow(boards.selectedBoard.id, i)
+            }
+            onAddRow={() => boards.selectedBoard && boards.addNewRow(boards.selectedBoard.id)}
+            onContextMenu={handleCanvasContext} // only canvas area opens hello menu
           />
         </RightPane>
       </div>
 
-      {/* Global menu overlay */}
-      <div className="pointer-events-none fixed inset-0">
-        {menus.map((m) => (
-          <MenuWindow
-            key={m.id}
-            id={m.id}
-            x={m.x}
-            y={m.y}
-            z={m.z}
-            locked={m.locked}
-            onClose={() => closeMenu(m.id)}
-            onToggleLock={() => toggleLock(m.id)}
-            onDragTo={(payload) => onDragTo(m.id, payload)}
-            onFocus={() => bringToFront(m.id)}
-          >
-            {renderMenuContent(m)}
-          </MenuWindow>
-        ))}
+      {/* Global menu overlay (high z-index so never "behind") */}
+      <div className="pointer-events-none fixed inset-0 z-[1000]">
+        {menus.map((m) => {
+          const theme = getMenuTheme(m.kind);
+          return (
+            <MenuWindow
+              key={m.id}
+              id={m.id}
+              x={m.x}
+              y={m.y}
+              z={m.z}
+              locked={m.locked}
+              onClose={() => closeMenu(m.id)}
+              onToggleLock={() => toggleLock(m.id)}
+              onDragTo={(payload) => onDragTo(m.id, payload)}
+              onFocus={() => bringToFront(m.id)}
+              tone={theme.tone}
+              size={theme.size}
+              density={theme.density}
+            >
+              {renderMenuContent(m)}
+            </MenuWindow>
+          );
+        })}
       </div>
-
-      {confirmDeleteId && (
-        <ConfirmBox text="Are you sure?" onYes={confirmYes} onNo={confirmNo} />
-      )}
     </div>
   );
 }

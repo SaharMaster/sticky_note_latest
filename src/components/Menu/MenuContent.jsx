@@ -4,21 +4,29 @@ import ToggleMenuItem from "./ToggleMenuItem";
 import MenuSeparator from "./MenuSeparator";
 
 /**
- * MenuContent
- * - Renders menu items from a schema
- * - Supports: action, toggle, submenu, separator
- * - Submenus are positioned relative to the parent container (which must be relative)
+ * MenuContent (command-driven)
+ * - Theming knobs: density, tone
+ * - Submenus inherit the same density/tone
  */
-
-export default function MenuContent({ items = [] }) {
+export default function MenuContent({ items = [], onAction, density = "regular", tone = "yellow" }) {
   const itemRefs = React.useRef([]);
   const [openIndex, setOpenIndex] = React.useState(null);
   const [submenuTop, setSubmenuTop] = React.useState(0);
 
+  const ringByTone = {
+    yellow: "ring-yellow-300",
+    neutral: "ring-neutral-200",
+    emerald: "ring-emerald-300",
+    rose: "ring-rose-300",
+    violet: "ring-violet-300",
+    sky: "ring-sky-300",
+    lime: "ring-lime-300",
+  };
+  const submenuRing = ringByTone[tone] ?? ringByTone.yellow;
+
   const toggleSubmenuAt = (idx) => {
     setOpenIndex((cur) => {
       if (cur === idx) return null;
-      // opening a new one -> measure anchor top
       const el = itemRefs.current[idx];
       if (el) setSubmenuTop(el.offsetTop);
       return idx;
@@ -33,8 +41,7 @@ export default function MenuContent({ items = [] }) {
     <div className="relative">
       {items.map((it, i) => {
         if (it.type === "separator") {
-          // We'll render separators after list, but allow inline too if provided
-          return <MenuSeparator key={`sep-${i}`} />;
+          return <MenuSeparator key={`sep-${i}`} density={density} />;
         }
 
         if (it.type === "action") {
@@ -43,16 +50,17 @@ export default function MenuContent({ items = [] }) {
             <MenuItem
               key={`a-${i}`}
               label={it.label}
-              onClick={it.onClick}
+              onClick={() => onAction?.(it)}
               rightSlot={it.rightSlot}
               className={danger ? "text-red-600 hover:bg-red-50" : ""}
               ref={setRefAt(i)}
+              density={density}
             />
           );
         }
 
         if (it.type === "toggle") {
-          return <ToggleMenuItem key={`t-${i}`} label={it.label} ref={setRefAt(i)} />;
+          return <ToggleMenuItem key={`t-${i}`} label={it.label} ref={setRefAt(i)} density={density} />;
         }
 
         if (it.type === "submenu") {
@@ -73,13 +81,14 @@ export default function MenuContent({ items = [] }) {
                     <ChevronRight />
                   </span>
                 }
+                density={density}
               />
               {isOpen && (
                 <div
-                  className="absolute left-full z-10 ml-2 w-[220px] rounded-sm bg-white shadow-sm ring-1 ring-yellow-300"
+                  className={`absolute left-full z-10 ml-2 w-[220px] rounded-sm bg-white shadow-sm ring-1 ${submenuRing}`}
                   style={{ top: submenuTop }}
                 >
-                  <MenuContent items={it.items || []} />
+                  <MenuContent items={it.items || []} onAction={onAction} density={density} tone={tone} />
                 </div>
               )}
             </React.Fragment>
