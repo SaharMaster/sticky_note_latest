@@ -28,6 +28,7 @@ export default function Board({
 
   return (
     <div
+      onClick={onActivate}
       onContextMenu={onContextMenu}
       className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition ${
         active ? "bg-neutral-100 ring-1 ring-neutral-300" : "border border-neutral-200 hover:bg-neutral-50"
@@ -46,7 +47,7 @@ export default function Board({
           className="ml-2 w-full rounded-sm border border-neutral-300 px-1 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
         />
       ) : (
-        <button onClick={onActivate} className="ml-2 flex-1 truncate text-left">
+        <button onClick={onActivate} className="flex-1 text-left">
           {defaultName}
         </button>
       )}

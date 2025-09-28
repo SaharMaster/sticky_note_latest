@@ -40,7 +40,6 @@ export function computeBoardLayout(board, containerWidth, metrics) {
   
     const sepLabel = (i) => (i === 0 ? "New" : i === 1 ? "Second block" : "Next block");
   
-    // Build rows: separator + grid for each row of notes
     board.rows.forEach((row, rowIndex) => {
       // Separator
       rows.push({
@@ -69,16 +68,24 @@ export function computeBoardLayout(board, containerWidth, metrics) {
         }
       }
   
-      // Plus tile at end of the row
-      const plusRect = {
-        x: xPad + col * (tile + gutter),
-        y: y + line * (tile + gutter),
-        w: tile,
-        h: tile,
-      };
+      // Compute row height based on items only (no extra line for a hidden plus)
+      const count = row.length;
+      const minLines = 1; // keep 1 line so empty sections never collapse
+      const linesForItems = Math.max(minLines, Math.ceil(Math.max(0, count) / cols));
+      const rowHeight = linesForItems * tile + (linesForItems - 1) * gutter;
   
-      const linesUsed = line + 1; // includes line holding the plus tile
-      const rowHeight = linesUsed * tile + (linesUsed - 1) * gutter;
+      // Plus tile position:
+      // - For empty rows: first slot (visible in your renderer)
+      // - For non-empty rows: computed but not used for height; safe for hit-testing if needed
+      const plusRect = (() => {
+        if (count === 0) {
+          return { x: xPad, y, w: tile, h: tile };
+        }
+        // Position after the last item (may start a new line if the last line is full)
+        const plusX = xPad + col * (tile + gutter);
+        const plusY = y + line * (tile + gutter);
+        return { x: plusX, y: plusY, w: tile, h: tile };
+      })();
   
       rows.push({
         kind: "grid",
@@ -92,7 +99,7 @@ export function computeBoardLayout(board, containerWidth, metrics) {
       y += rowHeight + metrics.rowGap;
     });
   
-    // Trailing separator and bottom plus (add row)
+    // Trailing separator and bottom add-row plus
     rows.push({
       kind: "separator",
       y,
@@ -102,23 +109,14 @@ export function computeBoardLayout(board, containerWidth, metrics) {
     });
     y += metrics.sepHeight;
   
-    const plusRow = {
-      x: xPad,
-      y,
-      w: tile,
-      h: tile,
-    };
+    const plusRow = { x: xPad, y, w: tile, h: tile };
     y += tile;
   
     return {
       rows,
       totalHeight: y + metrics.bottomPadY,
       plusRow,
-      geometry: {
-        contentOffsetX,
-        contentWidth,
-        innerWidth,
-      },
+      geometry: { contentOffsetX, contentWidth, innerWidth },
     };
   }
   
@@ -149,10 +147,17 @@ export function computeBoardLayout(board, containerWidth, metrics) {
         if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) {
           return { type: "plus-note", rowIndex: r.rowIndex, rect: p };
         }
+  
+        // Fallback: inside the section band horizontally -> treat as grid
+        const left = layout.geometry.contentOffsetX;
+        const right = layout.geometry.contentOffsetX + layout.geometry.contentWidth;
+        if (x >= left && x <= right) {
+          return { type: "grid", rowIndex: r.rowIndex };
+        }
       }
     }
   
-    // Bottom plus for "Add row"
+    // Bottom add-row
     const pr = layout.plusRow;
     if (pr && x >= pr.x && x <= pr.x + pr.w && y >= pr.y && y <= pr.y + pr.h) {
       return { type: "plus-row", rect: pr };

@@ -38,7 +38,7 @@ function AppInner() {
     [boardEditSet]
   );
 
-  // Keep the same command id "ui.section.toggleEdit" but treat it as board toggle
+  // "ui.section.toggleEdit" toggles board-wide edit mode
   const toggleSectionEdit = React.useCallback((boardId, _rowIdx) => {
     setBoardEditSet((prev) => {
       const next = new Set(prev);
@@ -53,7 +53,10 @@ function AppInner() {
       createCommandExecutor({
         boardsDomain: boards,
         confirm,
-        ui: { isSectionEditing: (_boardId, _rowIdx) => isBoardEditing(_boardId), toggleSectionEdit },
+        ui: {
+          isSectionEditing: (_boardId, _rowIdx) => isBoardEditing(_boardId),
+          toggleSectionEdit,
+        },
       }),
     [boards, confirm, isBoardEditing, toggleSectionEdit]
   );
@@ -67,9 +70,7 @@ function AppInner() {
       case "board":
         return `board:${extra.boardId ?? "none"}`;
       case "section":
-        return `section:${extra.boardId ?? "none"}`; // single per board now
-      case "hello":
-        return "hello";
+        return `section:${extra.boardId ?? "none"}`;
       default:
         return String(kind);
     }
@@ -79,14 +80,18 @@ function AppInner() {
     const margin = 8;
     const estW = 260;
     const estH = 220;
-    const vw = window.innerWidth || document.documentElement.clientWidth || 0;
-    const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+    const vw =
+      window.innerWidth || document.documentElement.clientWidth || 0;
+    const vh =
+      window.innerHeight || document.documentElement.clientHeight || 0;
 
     let x = clientX;
     let y = clientY;
 
-    if (x > vw - estW - margin) x = Math.max(margin, vw - estW - margin);
-    if (y > vh - estH - margin) y = Math.max(margin, vh - estH - margin);
+    if (x > vw - estW - margin)
+      x = Math.max(margin, vw - estW - margin);
+    if (y > vh - estH - margin)
+      y = Math.max(margin, vh - estH - margin);
     if (x < margin) x = margin;
     if (y < margin) y = margin;
 
@@ -112,12 +117,19 @@ function AppInner() {
     });
   };
 
-  const closeMenu = (id) => setMenus((prev) => prev.filter((m) => m.id !== id));
+  const closeMenu = (id) =>
+    setMenus((prev) => prev.filter((m) => m.id !== id));
   const toggleLock = (id) =>
-    setMenus((prev) => prev.map((m) => (m.id === id ? { ...m, locked: !m.locked } : m)));
+    setMenus((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, locked: !m.locked } : m))
+    );
   const onDragTo = (id, { clientX, clientY, offsetX, offsetY }) => {
     setMenus((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, x: clientX - offsetX, y: clientY - offsetY } : m))
+      prev.map((m) =>
+        m.id === id
+          ? { ...m, x: clientX - offsetX, y: clientY - offsetY }
+          : m
+      )
     );
   };
   const bringToFront = (id) => {
@@ -127,8 +139,6 @@ function AppInner() {
 
   const getMenuTheme = (kind) => {
     switch (kind) {
-      case "hello":
-        return { tone: "neutral", size: "md", density: "regular" };
       case "board":
       case "section":
       default:
@@ -139,68 +149,27 @@ function AppInner() {
   const prefetchForKind = async (kind) => {
     switch (kind) {
       case "board":
-        await Promise.all([prefetchMenu("board"), executor.prefetch(["boards"])]);
+        await Promise.all([
+          prefetchMenu("board"),
+          executor.prefetch(["boards"]),
+        ]);
         break;
       case "section":
-        await Promise.all([prefetchMenu("section"), executor.prefetch(["boards", "ui"])]);
-        break;
-      case "hello":
-        await Promise.all([prefetchMenu("hello"), executor.prefetch(["demo"])]);
+        await Promise.all([
+          prefetchMenu("section"),
+          executor.prefetch(["boards", "ui"]),
+        ]);
         break;
       default:
         break;
     }
   };
 
-  const handleCanvasContext = async (e) => {
-    e.preventDefault();
-    await prefetchForKind("hello");
-    openMenu("hello", e.clientX, e.clientY);
-  };
-
-  const handleBoardContext = async (e, boardId) => {
-    e.preventDefault();
-    await prefetchForKind("board");
-    openMenu("board", e.clientX, e.clientY, { boardId });
-  };
-
+  // Section menu opener (used by BoardCanvas)
   const handleSectionContext = async (e, boardId, rowIdx) => {
-    e.preventDefault();
+    e.preventDefault?.();
     await prefetchForKind("section");
     openMenu("section", e.clientX, e.clientY, { boardId, rowIdx });
-  };
-
-  const renderMenuContent = (m) => {
-    const theme = getMenuTheme(m.kind);
-
-    const ctxState =
-      m.kind === "section" && m.extra?.boardId != null
-        ? { editing: isBoardEditing(m.extra.boardId) }
-        : undefined;
-
-    const items = buildMenu(m.kind, { extra: m.extra, state: ctxState });
-
-    const handleAction = async (item) => {
-      if (item?.type !== "action" || !item.command) return;
-      await executor.run(item.command, item.args || {});
-      if (item.closeOnRun !== false) closeMenu(m.id);
-    };
-
-    const handleToggle = async (item) => {
-      if (!item?.command) return;
-      await executor.run(item.command, item.args || {});
-      if (item.closeOnRun === true) closeMenu(m.id);
-    };
-
-    return (
-      <MenuContent
-        items={items}
-        onAction={handleAction}
-        onToggle={handleToggle}
-        density={theme.density}
-        tone={theme.tone}
-      />
-    );
   };
 
   React.useEffect(() => {
@@ -208,13 +177,21 @@ function AppInner() {
       if (typeof e.composedPath === "function") {
         const path = e.composedPath();
         for (const el of path) {
-          if (el && el.getAttribute && el.getAttribute("data-menu-window") === "true") {
+          if (
+            el &&
+            el.getAttribute &&
+            el.getAttribute("data-menu-window") === "true"
+          ) {
             return true;
           }
         }
       }
       const t = e.target;
-      return !!(t && typeof t.closest === "function" && t.closest('[data-menu-window="true"]'));
+      return !!(
+        t &&
+        typeof t.closest === "function" &&
+        t.closest('[data-menu-window="true"]')
+      );
     };
 
     const onPointerDownCapture = (e) => {
@@ -232,21 +209,22 @@ function AppInner() {
     document.addEventListener("pointerdown", onPointerDownCapture, true);
     document.addEventListener("contextmenu", onContextMenuCapture, true);
     return () => {
-      document.removeEventListener("pointerdown", onPointerDownCapture, true);
-      document.removeEventListener("contextmenu", onContextMenuCapture, true);
+      document.removeEventListener(
+        "pointerdown",
+        onPointerDownCapture,
+        true
+      );
+      document.removeEventListener(
+        "contextmenu",
+        onContextMenuCapture,
+        true
+      );
     };
   }, [menus.length]);
 
-  // If current board is in edit mode, all its rows are “editing”
-  const editingRows = React.useMemo(() => {
-    const set = new Set();
-    const b = boards.selectedBoard;
-    if (!b) return set;
-    if (isBoardEditing(b.id)) {
-      for (let i = 0; i < b.rows.length; i++) set.add(i);
-    }
-    return set;
-  }, [boards.selectedBoard, isBoardEditing]);
+  const selectedBoard = boards.selectedBoard;
+  const isEditing =
+    !!selectedBoard && isBoardEditing(selectedBoard.id);
 
   return (
     <div className="h-screen w-screen bg-white text-neutral-800">
@@ -261,39 +239,51 @@ function AppInner() {
             onCreateBoard={boards.createBoard}
             onCommitCreateName={boards.commitCreateName}
             onOpenBoard={boards.openBoard}
-            onBoardContextMenu={handleBoardContext}
+            onBoardContextMenu={(e, id) => {
+              e.preventDefault?.();
+              prefetchForKind("board").then(() =>
+                openMenu("board", e.clientX, e.clientY, { boardId: id })
+              );
+            }}
           />
         </LeftPane>
 
         {/* RIGHT PANE */}
         <RightPane>
-          <Nav title={boards.selectedBoard ? boards.selectedBoard.name : ""} />
+          <Nav title={selectedBoard ? selectedBoard.name : ""} />
           <BoardView
-            board={boards.selectedBoard}
-            onAddNoteToRow={(i) =>
-              boards.selectedBoard && boards.addNoteToRow(boards.selectedBoard.id, i)
+            board={selectedBoard}
+            isEditing={isEditing}
+            onAddRow={() =>
+              selectedBoard && boards.addNewRow(selectedBoard.id)
             }
-            onAddRow={() => boards.selectedBoard && boards.addNewRow(boards.selectedBoard.id)}
-            onMoveNoteWithinRow={(sectionIndex, fromIndex, toIndex) =>
-              boards.selectedBoard &&
-              boards.moveNoteWithinRow(boards.selectedBoard.id, sectionIndex, fromIndex, toIndex)
+            onAddNoteToRow={(rowIdx) =>
+              selectedBoard && boards.addNoteToRow(selectedBoard.id, rowIdx)
             }
-            onMoveNoteBetweenRows={(fromSection, fromIndex, toSection, toIndex) =>
-              boards.selectedBoard &&
+            onSectionContextMenu={(e, rowIdx) =>
+              selectedBoard &&
+              handleSectionContext(e, selectedBoard.id, rowIdx)
+            }
+            onMoveWithinRow={(sectionIndex, fromIndex, toIndex) =>
+              selectedBoard &&
+              boards.moveNoteWithinRow(
+                selectedBoard.id,
+                sectionIndex,
+                fromIndex,
+                toIndex
+              )
+            }
+            onMoveBetweenRows={(fromSection, fromIndex, toSection, toIndex) =>
+              selectedBoard &&
               boards.moveNoteBetweenRows(
-                boards.selectedBoard.id,
+                selectedBoard.id,
                 fromSection,
                 fromIndex,
                 toSection,
                 toIndex
               )
             }
-            onContextMenu={handleCanvasContext}
-            onSectionContextMenu={(e, rowIdx) =>
-              boards.selectedBoard && handleSectionContext(e, boards.selectedBoard.id, rowIdx)
-            }
-            editingRows={editingRows}
-          />
+            />
         </RightPane>
       </div>
 
@@ -317,7 +307,27 @@ function AppInner() {
               size={theme.size}
               density={theme.density}
             >
-              {renderMenuContent(m)}
+              <MenuContent
+                items={buildMenu(m.kind, {
+                  extra: m.extra,
+                  state:
+                    m.kind === "section" && m.extra?.boardId != null
+                      ? { editing: isBoardEditing(m.extra.boardId) }
+                      : undefined,
+                })}
+                onAction={async (item) => {
+                  if (item?.type !== "action" || !item.command) return;
+                  await executor.run(item.command, item.args || {});
+                  if (item.closeOnRun !== false) closeMenu(m.id);
+                }}
+                onToggle={async (item) => {
+                  if (!item?.command) return;
+                  await executor.run(item.command, item.args || {});
+                  if (item.closeOnRun === true) closeMenu(m.id);
+                }}
+                density={theme.density}
+                tone={theme.tone}
+              />
             </MenuWindow>
           );
         })}
