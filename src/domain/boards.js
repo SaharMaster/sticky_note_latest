@@ -72,9 +72,22 @@ export function useBoardsDomain() {
           if (i !== sectionIndex) return row;
           const next = row.slice();
           const [item] = next.splice(fromIndex, 1);
+          // toIndex is in the shorter array after removal
           next.splice(toIndex, 0, item);
           return next;
         });
+        return { ...b, rows };
+      })
+    );
+  }
+
+  function moveNoteBetweenRows(boardId, fromSection, fromIndex, toSection, toIndex) {
+    setBoards((prev) =>
+      prev.map((b) => {
+        if (b.id !== boardId) return b;
+        const rows = b.rows.map((r) => r.slice());
+        const [item] = rows[fromSection].splice(fromIndex, 1);
+        rows[toSection].splice(toIndex, 0, item);
         return { ...b, rows };
       })
     );
@@ -95,5 +108,6 @@ export function useBoardsDomain() {
     addNoteToRow,
     addNewRow,
     moveNoteWithinRow,
+    moveNoteBetweenRows,
   };
 }

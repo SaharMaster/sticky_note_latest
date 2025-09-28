@@ -15,9 +15,9 @@ export async function prefetchMenu(kind) {
       builders.set("board", mod.buildBoardMenu);
       break;
     }
-    case "hello": {
-      const mod = await import("../menus/helloMenu.js");
-      builders.set("hello", mod.buildHelloMenu);
+    case "section": {
+      const mod = await import("../menus/sectionMenu.js");
+      builders.set("section", mod.buildSectionMenu);
       break;
     }
     default:

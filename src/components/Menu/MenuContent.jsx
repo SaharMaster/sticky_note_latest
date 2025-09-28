@@ -7,8 +7,15 @@ import MenuSeparator from "./MenuSeparator";
  * MenuContent (command-driven)
  * - Theming knobs: density, tone
  * - Submenus inherit the same density/tone
+ * - Supports controlled toggles via onToggle(item)
  */
-export default function MenuContent({ items = [], onAction, density = "regular", tone = "yellow" }) {
+export default function MenuContent({
+  items = [],
+  onAction,
+  onToggle, // (item) => void
+  density = "regular",
+  tone = "yellow",
+}) {
   const itemRefs = React.useRef([]);
   const [openIndex, setOpenIndex] = React.useState(null);
   const [submenuTop, setSubmenuTop] = React.useState(0);
@@ -60,7 +67,16 @@ export default function MenuContent({ items = [], onAction, density = "regular",
         }
 
         if (it.type === "toggle") {
-          return <ToggleMenuItem key={`t-${i}`} label={it.label} ref={setRefAt(i)} density={density} />;
+          return (
+            <ToggleMenuItem
+              key={`t-${i}`}
+              label={it.label}
+              enabled={!!it.enabled}
+              onToggle={() => onToggle?.(it)}
+              ref={setRefAt(i)}
+              density={density}
+            />
+          );
         }
 
         if (it.type === "submenu") {
@@ -88,7 +104,13 @@ export default function MenuContent({ items = [], onAction, density = "regular",
                   className={`absolute left-full z-10 ml-2 w-[220px] rounded-sm bg-white shadow-sm ring-1 ${submenuRing}`}
                   style={{ top: submenuTop }}
                 >
-                  <MenuContent items={it.items || []} onAction={onAction} density={density} tone={tone} />
+                  <MenuContent
+                    items={it.items || []}
+                    onAction={onAction}
+                    onToggle={onToggle}
+                    density={density}
+                    tone={tone}
+                  />
                 </div>
               )}
             </React.Fragment>

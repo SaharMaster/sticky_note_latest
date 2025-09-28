@@ -27,36 +27,58 @@ export default function App() {
 }
 
 function AppInner() {
-  // Boards domain (state + pure actions)
   const boards = useBoardsDomain();
   const confirm = useConfirm();
 
-  // Menu overlay state
+  // Board-wide edit mode: Set of boardIds that are in edit mode
+  const [boardEditSet, setBoardEditSet] = React.useState(() => new Set());
+
+  const isBoardEditing = React.useCallback(
+    (boardId) => boardEditSet.has(boardId),
+    [boardEditSet]
+  );
+
+  // Keep the same command id "ui.section.toggleEdit" but treat it as board toggle
+  const toggleSectionEdit = React.useCallback((boardId, _rowIdx) => {
+    setBoardEditSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(boardId)) next.delete(boardId);
+      else next.add(boardId);
+      return next;
+    });
+  }, []);
+
+  const executor = React.useMemo(
+    () =>
+      createCommandExecutor({
+        boardsDomain: boards,
+        confirm,
+        ui: { isSectionEditing: (_boardId, _rowIdx) => isBoardEditing(_boardId), toggleSectionEdit },
+      }),
+    [boards, confirm, isBoardEditing, toggleSectionEdit]
+  );
+
+  // Menus overlay
   const [menus, setMenus] = React.useState([]);
   const zRef = React.useRef(50);
 
-  const executor = React.useMemo(
-    () => createCommandExecutor({ boardsDomain: boards, confirm }),
-    [boards, confirm]
-  );
-
-  // Unique key per menu "component" to prevent duplicates
   const getMenuKey = (kind, extra = {}) => {
     switch (kind) {
       case "board":
-        return `board:${extra.boardId ?? "none"}`; // one per board
+        return `board:${extra.boardId ?? "none"}`;
+      case "section":
+        return `section:${extra.boardId ?? "none"}`; // single per board now
       case "hello":
-        return "hello"; // singleton
+        return "hello";
       default:
         return String(kind);
     }
   };
 
-  // Keep menus within viewport and slightly away from edges
   const clampPosition = (clientX, clientY) => {
     const margin = 8;
-    const estW = 260; // conservative default min width
-    const estH = 220; // conservative default height
+    const estW = 260;
+    const estH = 220;
     const vw = window.innerWidth || document.documentElement.clientWidth || 0;
     const vh = window.innerHeight || document.documentElement.clientHeight || 0;
 
@@ -71,7 +93,6 @@ function AppInner() {
     return { x, y };
   };
 
-  // Open menu with de-dup (bring to front and move if already open)
   const openMenu = (kind, clientX, clientY, extra = {}) => {
     const id = uid();
     const z = ++zRef.current;
@@ -79,60 +100,49 @@ function AppInner() {
     const key = getMenuKey(kind, extra);
 
     setMenus((prev) => {
-      // Keep only locked menus from previous batch
       const locked = prev.filter((m) => m.locked);
-
-      // Try to find existing menu with the same key (locked or unlocked)
       const all = prev;
       const existing = all.find((m) => m.key === key);
       if (existing) {
-        // Update position and z of existing; keep lock state as-is
         return all.map((m) =>
           m.key === key ? { ...m, x, y, z: ++zRef.current } : m
         );
       }
-
-      // Otherwise, create a new one
-      return [
-        ...locked,
-        { id, key, x, y, z, locked: false, kind, extra },
-      ];
+      return [...locked, { id, key, x, y, z, locked: false, kind, extra }];
     });
   };
 
   const closeMenu = (id) => setMenus((prev) => prev.filter((m) => m.id !== id));
-  const closeUnlockedMenus = () => setMenus((prev) => prev.filter((m) => m.locked));
-
   const toggleLock = (id) =>
     setMenus((prev) => prev.map((m) => (m.id === id ? { ...m, locked: !m.locked } : m)));
-
   const onDragTo = (id, { clientX, clientY, offsetX, offsetY }) => {
     setMenus((prev) =>
       prev.map((m) => (m.id === id ? { ...m, x: clientX - offsetX, y: clientY - offsetY } : m))
     );
   };
-
   const bringToFront = (id) => {
     const z = ++zRef.current;
     setMenus((prev) => prev.map((m) => (m.id === id ? { ...m, z } : m)));
   };
 
-  // Theme per menu kind
   const getMenuTheme = (kind) => {
     switch (kind) {
       case "hello":
         return { tone: "neutral", size: "md", density: "regular" };
       case "board":
+      case "section":
       default:
         return { tone: "yellow", size: "md", density: "regular" };
     }
   };
 
-  // Prefetch menus and commands before opening
   const prefetchForKind = async (kind) => {
     switch (kind) {
       case "board":
         await Promise.all([prefetchMenu("board"), executor.prefetch(["boards"])]);
+        break;
+      case "section":
+        await Promise.all([prefetchMenu("section"), executor.prefetch(["boards", "ui"])]);
         break;
       case "hello":
         await Promise.all([prefetchMenu("hello"), executor.prefetch(["demo"])]);
@@ -142,24 +152,33 @@ function AppInner() {
     }
   };
 
-  // Context menu triggers (hello menu only from canvas area, not Nav)
   const handleCanvasContext = async (e) => {
     e.preventDefault();
     await prefetchForKind("hello");
     openMenu("hello", e.clientX, e.clientY);
   };
 
-  // Board row context menu
   const handleBoardContext = async (e, boardId) => {
     e.preventDefault();
     await prefetchForKind("board");
     openMenu("board", e.clientX, e.clientY, { boardId });
   };
 
-  // Command-driven content
+  const handleSectionContext = async (e, boardId, rowIdx) => {
+    e.preventDefault();
+    await prefetchForKind("section");
+    openMenu("section", e.clientX, e.clientY, { boardId, rowIdx });
+  };
+
   const renderMenuContent = (m) => {
-    const items = buildMenu(m.kind, { extra: m.extra });
     const theme = getMenuTheme(m.kind);
+
+    const ctxState =
+      m.kind === "section" && m.extra?.boardId != null
+        ? { editing: isBoardEditing(m.extra.boardId) }
+        : undefined;
+
+    const items = buildMenu(m.kind, { extra: m.extra, state: ctxState });
 
     const handleAction = async (item) => {
       if (item?.type !== "action" || !item.command) return;
@@ -167,28 +186,29 @@ function AppInner() {
       if (item.closeOnRun !== false) closeMenu(m.id);
     };
 
+    const handleToggle = async (item) => {
+      if (!item?.command) return;
+      await executor.run(item.command, item.args || {});
+      if (item.closeOnRun === true) closeMenu(m.id);
+    };
+
     return (
       <MenuContent
         items={items}
         onAction={handleAction}
+        onToggle={handleToggle}
         density={theme.density}
         tone={theme.tone}
       />
     );
   };
 
-  // Close unlocked menus on any outside left/right click via capture listeners
   React.useEffect(() => {
     const isInsideMenuEvent = (e) => {
-      // Prefer composedPath for robust hit-testing (SVG, nested elements)
       if (typeof e.composedPath === "function") {
         const path = e.composedPath();
         for (const el of path) {
-          if (
-            el &&
-            el.getAttribute &&
-            el.getAttribute("data-menu-window") === "true"
-          ) {
+          if (el && el.getAttribute && el.getAttribute("data-menu-window") === "true") {
             return true;
           }
         }
@@ -199,14 +219,13 @@ function AppInner() {
 
     const onPointerDownCapture = (e) => {
       if (menus.length === 0) return;
-      if (isInsideMenuEvent(e)) return; // ignore clicks inside any menu
-      // Close only unlocked, allow the event to continue (so a new menu can open)
+      if (isInsideMenuEvent(e)) return;
       setMenus((prev) => prev.filter((m) => m.locked));
     };
 
     const onContextMenuCapture = (e) => {
       if (menus.length === 0) return;
-      if (isInsideMenuEvent(e)) return; // ignore right-clicks inside menu
+      if (isInsideMenuEvent(e)) return;
       setMenus((prev) => prev.filter((m) => m.locked));
     };
 
@@ -217,6 +236,17 @@ function AppInner() {
       document.removeEventListener("contextmenu", onContextMenuCapture, true);
     };
   }, [menus.length]);
+
+  // If current board is in edit mode, all its rows are “editing”
+  const editingRows = React.useMemo(() => {
+    const set = new Set();
+    const b = boards.selectedBoard;
+    if (!b) return set;
+    if (isBoardEditing(b.id)) {
+      for (let i = 0; i < b.rows.length; i++) set.add(i);
+    }
+    return set;
+  }, [boards.selectedBoard, isBoardEditing]);
 
   return (
     <div className="h-screen w-screen bg-white text-neutral-800">
@@ -244,12 +274,30 @@ function AppInner() {
               boards.selectedBoard && boards.addNoteToRow(boards.selectedBoard.id, i)
             }
             onAddRow={() => boards.selectedBoard && boards.addNewRow(boards.selectedBoard.id)}
-            onContextMenu={handleCanvasContext} // only canvas area opens hello menu
+            onMoveNoteWithinRow={(sectionIndex, fromIndex, toIndex) =>
+              boards.selectedBoard &&
+              boards.moveNoteWithinRow(boards.selectedBoard.id, sectionIndex, fromIndex, toIndex)
+            }
+            onMoveNoteBetweenRows={(fromSection, fromIndex, toSection, toIndex) =>
+              boards.selectedBoard &&
+              boards.moveNoteBetweenRows(
+                boards.selectedBoard.id,
+                fromSection,
+                fromIndex,
+                toSection,
+                toIndex
+              )
+            }
+            onContextMenu={handleCanvasContext}
+            onSectionContextMenu={(e, rowIdx) =>
+              boards.selectedBoard && handleSectionContext(e, boards.selectedBoard.id, rowIdx)
+            }
+            editingRows={editingRows}
           />
         </RightPane>
       </div>
 
-      {/* Global menu overlay (high z-index so never "behind") */}
+      {/* Global menu overlay */}
       <div className="pointer-events-none fixed inset-0 z-[1000]">
         {menus.map((m) => {
           const theme = getMenuTheme(m.kind);
@@ -278,7 +326,6 @@ function AppInner() {
   );
 }
 
-/* --- Utils --- */
 function uid() {
   const a = new Uint32Array(2);
   if (globalThis.crypto?.getRandomValues) {
