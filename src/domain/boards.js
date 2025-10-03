@@ -20,8 +20,20 @@ export function useBoardsDomain() {
   const [selectedId, setSelectedId] = React.useState(null);
   const [editingId, setEditingId] = React.useState(null);
 
+  const ensureSectionNames = (b) => {
+    const count = b.rows.length;
+    const names = Array.isArray(b.sectionNames) ? b.sectionNames.slice() : [];
+    while (names.length < count) {
+      names.push(""); // default empty name; UI will fallback to "Section N"
+    }
+    if (names.length > count) {
+      names.length = count;
+    }
+    return names;
+  };
+
   const createBoard = React.useCallback(() => {
-    const b = { id: uid(), name: "New board", rows: [[createNote()]] };
+    const b = { id: uid(), name: "New board", rows: [[createNote()]], sectionNames: [""] };
     setBoards((prev) => [...prev, b]);
     setSelectedId(b.id);
     setEditingId(b.id);
@@ -58,7 +70,41 @@ export function useBoardsDomain() {
 
   const addNewRow = React.useCallback((boardId) => {
     setBoards((prev) =>
-      prev.map((b) => (b.id !== boardId ? b : { ...b, rows: [...b.rows, [createNote()]] }))
+      prev.map((b) => {
+        if (b.id !== boardId) return b;
+        const rows = [...b.rows, [createNote()]];
+        const sectionNames = ensureSectionNames(b);
+        sectionNames.push("");
+        return { ...b, rows, sectionNames };
+      })
+    );
+  }, []);
+
+  const renameSectionName = React.useCallback((boardId, rowIdx, name) => {
+    const raw = String(name ?? "");
+    const trimmed = raw.trim();
+    if (!trimmed) return; // restriction: do not save empty names
+    setBoards((prev) =>
+      prev.map((b) => {
+        if (b.id !== boardId) return b;
+        const sectionNames = ensureSectionNames(b);
+        sectionNames[rowIdx] = trimmed;
+        return { ...b, sectionNames };
+      })
+    );
+  }, []);
+
+  const deleteSection = React.useCallback((boardId, rowIdx) => {
+    setBoards((prev) =>
+      prev.map((b) => {
+        if (b.id !== boardId) return b;
+        const rows = b.rows.slice();
+        if (rowIdx < 0 || rowIdx >= rows.length) return b;
+        rows.splice(rowIdx, 1);
+        const sectionNames = ensureSectionNames(b);
+        sectionNames.splice(rowIdx, 1);
+        return { ...b, rows, sectionNames };
+      })
     );
   }, []);
 
@@ -72,7 +118,6 @@ export function useBoardsDomain() {
           if (i !== sectionIndex) return row;
           const next = row.slice();
           const [item] = next.splice(fromIndex, 1);
-          // toIndex is in the shorter array after removal
           next.splice(toIndex, 0, item);
           return next;
         });
@@ -109,5 +154,8 @@ export function useBoardsDomain() {
     addNewRow,
     moveNoteWithinRow,
     moveNoteBetweenRows,
+    // new section-level actions
+    renameSectionName,
+    deleteSection,
   };
 }

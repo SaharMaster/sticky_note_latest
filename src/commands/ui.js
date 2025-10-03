@@ -9,6 +9,11 @@ export function createUiCommands({ ui }) {
           if (!ui?.toggleSectionEdit) return;
           ui.toggleSectionEdit(boardId, rowIdx);
         },
+        // "ui.section.startRename"
+        startRename: async ({ boardId, rowIdx }) => {
+          if (!ui?.startSectionRename) return;
+          ui.startSectionRename(boardId, rowIdx);
+        },
       },
     };
   }

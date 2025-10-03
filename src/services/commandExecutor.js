@@ -22,12 +22,6 @@ export function createCommandExecutor(deps) {
       return packs[ns];
     }
 
-    if (ns === "demo") {
-      const mod = await import("../commands/demo.js");
-      packs[ns] = mod.createDemoCommands(deps);
-      return packs[ns];
-    }
-
     if (ns === "ui") {
       const mod = await import("../commands/ui.js");
       packs[ns] = mod.createUiCommands(deps);

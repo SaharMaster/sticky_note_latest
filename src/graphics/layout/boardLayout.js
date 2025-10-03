@@ -13,18 +13,18 @@
  */
 
 export function computeBoardLayout(board, containerWidth, metrics) {
-    if (!board) {
-      return {
-        rows: [],
-        totalHeight: metrics.topPadY + metrics.bottomPadY,
-        plusRow: null,
-        geometry: {
-          contentOffsetX: 0,
-          contentWidth: Math.min(containerWidth, metrics.contentMaxWidth),
-          innerWidth: 0,
-        },
-      };
-    }
+  if (!board) {
+    return {
+      rows: [],
+      totalHeight: metrics.topPadY + metrics.bottomPadY,
+      plusRow: null,
+      geometry: {
+        contentOffsetX: 0,
+        contentWidth: Math.min(containerWidth, metrics.contentMaxWidth),
+        innerWidth: 0,
+      },
+    };
+  }
   
     const contentWidth = Math.min(containerWidth, metrics.contentMaxWidth);
     const contentOffsetX = Math.floor((containerWidth - contentWidth) / 2);

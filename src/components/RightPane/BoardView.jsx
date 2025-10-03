@@ -11,10 +11,15 @@ export default function BoardView({
   board,
   isEditing = false,
   onAddRow,
-  onAddNoteToRow,       // NEW: add note into a specific row
+  onAddNoteToRow,           // add note into a specific row
   onSectionContextMenu,
+  onSeparatorContextMenu,   // new: separator menu opener
   onMoveWithinRow,
   onMoveBetweenRows,
+  // inline rename wiring
+  renamingSection = null,   // { rowIdx, name } | null
+  onCommitSectionName,      // (rowIdx, newName)
+  onCancelSectionRename,    // () => void
 }) {
   const scrollRef = React.useRef(null);
 
@@ -30,8 +35,12 @@ export default function BoardView({
         onAddNoteToRow={onAddNoteToRow}
         scrollEl={scrollRef}
         onSectionContextMenu={onSectionContextMenu}
+        onSeparatorContextMenu={onSeparatorContextMenu}
         onMoveWithinRow={onMoveWithinRow}
         onMoveBetweenRows={onMoveBetweenRows}
+        renamingSection={renamingSection}
+        onCommitSectionName={onCommitSectionName}
+        onCancelSectionRename={onCancelSectionRename}
       />
     </div>
   );

@@ -20,6 +20,13 @@ export async function prefetchMenu(kind) {
       builders.set("section", mod.buildSectionMenu);
       break;
     }
+
+    case "separator": {
+      const mod = await import("../menus/separatorMenu.js");
+      builders.set("separator", mod.buildSeparatorMenu);
+      break;
+    }
+    
     default:
       // Unknown kind; no-op
       break;
